@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      - run: pytest
+
+  no-write-methods:
+    # Гарантия read-only проверяется отдельным шагом, а не доверием к ревью:
+    # появление пишущего метода в реестре должно ронять сборку.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e .
+      - name: В реестре нет пишущих методов
+        run: |
+          python - <<'PY'
+          from wbsync import registry
+          writing = [m.name for m in registry.METHODS if m.http not in {"GET", "POST"}]
+          assert not writing, f"в реестре появились пишущие методы: {writing}"
+          posts = [m.name for m in registry.METHODS if m.http == "POST"]
+          assert posts == ["cards_list"], f"новый POST в реестре: {posts}"
+          print(f"методов: {len(registry.METHODS)}, пишущих: 0")
+          PY
